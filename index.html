@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aruz Meter Analyzer</title>
+<style>
+    :root{ 
+      --bg:#0b1020; --panel:#141a2e; --muted:#7f8db3; --text:#e7ecff; --accent:#6aa3ff; 
+      --good:#42c98a; --warn:#ffcc66; --bad:#ff6a88; --med:#76d0ff; --ulama:#c68cff;
+      --imale:#ffb347; --zihaf:#66ffcc;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    header{padding:20px 16px;border-bottom:1px solid #1f2744;background:linear-gradient(180deg,#0c1326,transparent)}
+    h1{margin:0;font-size:22px}
+    .container{max-width:1200px;margin:0 auto;padding:16px}
+    .grid{display:grid;gap:16px;grid-template-columns:1fr}
+    @media(min-width:1000px){.grid{grid-template-columns:420px 1fr}}
+    .card{background:var(--panel);border:1px solid #1f2744;border-radius:16px;padding:16px;box-shadow:0 4px 24px rgba(0,0,0,.2)}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+    textarea, select{width:100%;background:#0d1430;color:var(--text);border:1px solid #22305b;border-radius:12px;padding:10px 12px;outline:none}
+    textarea{min-height:120px}
+    textarea:focus, select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(106,163,255,.15)}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .row>*{flex:1}
+    .btn{appearance:none;border:1px solid #2d3a64;background:#162046;color:var(--text);padding:10px 14px;border-radius:12px;cursor:pointer}
+    .btn:hover{border-color:#3b4b7f}
+    .btn.primary{background:linear-gradient(180deg,#2a4b9b,#1b2c64);border-color:#3656a6}
+    .btn.ghost{background:transparent}
+    table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    th,td{padding:8px 10px;text-align:left;vertical-align:top}
+    thead th{font-size:12px;color:var(--muted);font-weight:600}
+    tbody tr{background:#0f1633;border:1px solid #1f274d}
+    tbody td:first-child, thead th:first-child{border-top-left-radius:10px;border-bottom-left-radius:10px}
+    tbody td:last-child, thead th:last-child{border-top-right-radius:10px;border-bottom-right-radius:10px}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #2a3868;background:#141d3f;color:#cfe0ff;font-size:12px}
+    .muted{color:var(--muted)}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .err{color:var(--bad);font-weight:700}
+    .med{color:var(--med);font-weight:700}
+    .small{font-size:12px}
+    .inline{display:inline-flex;gap:8px;align-items:center}
+    .syll{padding:0 2px;border-radius:6px}
+    .syll.err{background:rgba(255,106,136,.18);border:1px solid rgba(255,106,136,.35)}
+    .syll.med{background:rgba(118,208,255,.12);border:1px dashed rgba(118,208,255,.5)}
+    .syll.ulama{background:rgba(198,140,255,.14);border:1px dashed rgba(198,140,255,.55)}
+    .syll.imale{background:rgba(255,179,71,.18);border:1px solid rgba(255,179,71,.45)}
+    .syll.zihaf{background:rgba(102,255,204,.18);border:1px solid rgba(102,255,204,.45)}
+    .stack{display:flex;flex-direction:column;gap:2px}
+  </style>  
+  
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1>Aruz Meter Analyzer — line & poem</h1>
+    <div class="muted small">Designed by Enes Yılandiloğlu. Contact: enes.yilandiloglu@helsinki.fi</div>
+  </div>
+</header>
+
+<div class="container grid">
+  <section class="card">
+    <label>Meter list (paste the contents of <em>vezin_listesi.txt</em>)</label>
+    <textarea id="meters" spellcheck="false"></textarea>
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>Force poem meter (optional)</label>
+        <select id="forceMeter"><option value="">Auto-detect by majority</option></select>
+      </div>
+      <div>
+        <label class="inline"><input type="checkbox" id="useHamming"> <span class="small">Use Hamming if equal length</span></label>
+        <label class="inline"><input type="checkbox" id="normalizeScore" checked> <span class="small">Normalize scores</span></label>
+        <label class="inline"><input type="number" id="maxMed" min="0" value="4" style="width:90px"> <span class="small">Max MED inserts</span></label>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <label>Poem text (one verse per line)</label>
+    <textarea id="poem" placeholder="Type/paste a poem...&#10;Each verse on its own line." spellcheck="false"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="btn primary" id="btnRun">Analyze</button>
+      <button class="btn ghost" id="btnClear">Clear</button>
+    </div>
+  </section>
+
+  <section class="card" style="grid-column:1/-1">
+    <div class="row" style="align-items:center;justify-content:space-between">
+      <div class="inline"><div class="pill" id="poemResult">Poem meter: —</div></div>
+      <div class="inline small muted">Lines: <span id="lineCount">0</span></div>
+    </div>
+    <div id="results"></div>
+    <div class="small muted" style="margin-top:8px">
+        Legend:
+        <span class="syll imale">îmâle</span> = long→short fix (orange),
+        <span class="syll zihaf">zihâf</span> = short→long fix (teal),
+        <span class="syll med">MED</span> = extra dot after a long syllable (cyan; only if line is shorter),
+        <span class="syll ulama">ulama (vasl)</span> = split 3-letter closed syllable (CVC→CV) + move last consonant to next open syllable (purple; forces the first to stay open),
+        <span class="syll err">mismatch</span> = generic ins/del/substitution (red).
+        Final syllable is always treated as <code>-</code>.
+      </div>      
+  </section>
+</div>
+
+<script>
+// ===== Helpers =====
+const onlyDotDash = s => (s||"").replace(/[^.-]/g, "");
+const escapeHtml = s => (s||"").replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function levenshtein(a,b){
+  const m=a.length, n=b.length; const dp=Array.from({length:m+1},()=>Array(n+1).fill(0));
+  for(let i=0;i<=m;i++) dp[i][0]=i; for(let j=0;j<=n;j++) dp[0][j]=j;
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++){
+    const cost = a[i-1]===b[j-1]?0:1;
+    dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+cost);
+  }
+  return {dist:dp[m][n], dp};
+}
+
+function backtrackAlign(a,b){
+  const {dp} = levenshtein(a,b); const m=a.length, n=b.length;
+  let i=m, j=n; const alA=[], alB=[], ops=[];
+  while(i>0 || j>0){
+    if(i>0 && dp[i][j]===dp[i-1][j]+1){ alA.push(a[i-1]); alB.push('•'); ops.push('D'); i--; continue; }
+    if(j>0 && dp[i][j]===dp[i][j-1]+1){ alA.push('•'); alB.push(b[j-1]); ops.push('I'); j--; continue; }
+    const cost = (i>0 && j>0 && a[i-1]!==b[j-1])?1:0;
+    if(i>0 && j>0 && dp[i][j]===dp[i-1][j-1]+cost){ alA.push(a[i-1]); alB.push(b[j-1]); ops.push(cost? 'S':'M'); i--; j--; continue; }
+    if(i>0){ alA.push(a[i-1]); alB.push('•'); ops.push('D'); i--; }
+    else if(j>0){ alA.push('•'); alB.push(b[j-1]); ops.push('I'); j--; }
+  }
+  return {alA:alA.reverse(), alB:alB.reverse(), ops:ops.reverse()};
+}
+
+function hamming(a,b){ if(a.length!==b.length) return Math.max(a.length,b.length); let d=0; for(let i=0;i<a.length;i++) if(a[i]!==b[i]) d++; return d; }
+
+function parseMeterList(text){
+  const lines=(text||"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  const meters=[];
+  for(let i=0;i<lines.length;i++){
+    const pat = onlyDotDash(lines[i]);
+    const compact = lines[i].replace(/\s+/g,"");
+    if(pat && pat.length===compact.length){
+      let name = `class_${meters.length}`;
+      if(i+1<lines.length){
+        const nxt=lines[i+1]; const nxtClean=onlyDotDash(nxt);
+        if(!(nxtClean && nxtClean.length===nxt.replace(/\s+/g,"").length)) { name=nxt; i++; }
+      }
+      meters.push({pattern:pat, name});
+    }
+  }
+  return meters;
+}
+
+// ===== JS port of your proven Python syllabifier =====
+function vezin_bakici_line(input){
+  // 1) cvV — normalize (Python’dakiyle birebir)
+  function cvV(a){
+    let s = String(a);
+    s = s.replace(/[0-9]/g, "");
+    s = s.replace(/(\n|\d+|\[|\]|\(|\)|\?|\.|-|“|”|«|»|ˇ|˘|ʷ)/g, "");
+    s = s.replace(/À/g, "â");
+    s = s.replace(/æ/g, "s");
+    s = s.replace(/İ/g, "i");
+    s = s.replace(/Ī/g, "î");
+    s = s.replace(/Ç/g, "ç");
+    s = s.replace(/Ş/g, "ş");
+    s = s.toLowerCase();
+    s = s.replace(/¶i/g, "");
+    s = s.replace(/1/g, "l");
+    s = s.replace(/[‘'èêʿ῾ˀ᾽]/g, "’");
+    s = s.replace(/[ḍē]/g, "d");
+    s = s.replace(/[Ġġá]/g, "g");
+    s = s.replace(/[ḳ̇̄ḳķú]/g, "k");
+    s = s.replace(/[ẖģħĥḤḥÒòÒḫó]/g, "h");
+    s = s.replace(/[āàÀ]/g, "â");
+    s = s.replace(/[ìī]/g, "î");
+    s = s.replace(/ō/g, "ô");
+    s = s.replace(/[S̱s̱ŝśṯåãäṣ]/g, "s");
+    s = s.replace(/[ùẅṭš]/g, "t");
+    s = s.replace(/[ūÿ]/g, "û");
+    s = s.replace(/̇̄v/g, "v");
+    s = s.replace(/[ẓźøżẕžõ]/g, "z");
+    s = s.replace(/[ė̄ė]/g, "e");
+    s = s.replace(/[ñ̄ňŋ]/g, "ñ");
+    return s;
+  }
+
+  // 2) hece_ayirici — Python algoritması
+  const VOWELS_SHORT = ["a","e","ı","i","o","ö","u","ü"];
+  const VOWELS_LONG  = ["â","î","ô","û"];
+  const VOWELS_ALL   = VOWELS_SHORT.concat(VOWELS_LONG);
+
+  function hece_ayirici(word){
+    const listed = Array.from(cvV(word));
+    let outList;
+
+    if (listed.length > 1 &&
+        VOWELS_ALL.includes(listed[listed.length-1]) &&
+        VOWELS_ALL.includes(listed[listed.length-2])) {
+      const xAdded = listed.slice();
+      xAdded.splice(xAdded.length-1, 0, "X");
+
+      const cuts = [];
+      for (let i=0;i<xAdded.length;i++){
+        if (i > 1 && VOWELS_ALL.includes(xAdded[i])) cuts.push(i-1);
+      }
+      for (let k=cuts.length-1;k>=0;k--) xAdded.splice(cuts[k], 0, "-");
+      xAdded.push("-");
+      outList = xAdded;
+    } else {
+      const cuts = [];
+      for (let i=0;i<listed.length;i++){
+        if (i > 1 && VOWELS_ALL.includes(listed[i])) cuts.push(i-1);
+      }
+      for (let k=cuts.length-1;k>=0;k--) listed.splice(cuts[k], 0, "-");
+      listed.push("-");
+      outList = listed;
+    }
+    return outList.join("").replace(/X/g, "");
+  }
+
+  // 3) hece_degeri_bulucu — Python ile birebir
+  function hece_degeri_bulucu(word){
+    let seperated = hece_ayirici(word);
+    seperated = seperated.replace(/[aeıioöuü]-/g, ".");
+    seperated = seperated.replace(/[’bcçdfgğhjklmnprsştvyzñâîôû]-/g, "-");
+    return seperated.replace(/[’bcçdfgğhjklmnprsştvyzñâîôûaeıioöuü]/g, "");
+  }
+
+  // 4) satır için semboller + heceler
+  const words = (input || "").trim().split(/\s+/).filter(Boolean);
+  const symbols = [];
+  const wordSyllables = [];
+
+  for (const w of words){
+    const marked = hece_ayirici(w);                         // örn: "destbûsı" → "des-tbû-sı-"
+    const syls    = marked.split("-").filter(x => x !== ""); // ["des","tbû","sı"]
+
+    // hece sembolleri: kısa ünlü ile biten '.'; aksi '-'
+    for (const syl of syls){
+      const last = syl[syl.length-1] || "";
+      symbols.push(/[aeıioöuü]/.test(last) ? "." : "-");
+    }
+    wordSyllables.push(syls);
+  }
+
+  // Python kuralı: son sembol daima '-'
+  if (symbols.length > 0) symbols[symbols.length-1] = "-";
+
+  return { symbols, wordSyllables };
+}
+
+// (Opsiyonel) Tek string .- istersen:
+function vezin_bakici_sentence(input){
+  function hece_ayirici(word){
+    // Yukarıdakiyle aynı (eğer dışarıda erişmek istersen yukarıdan çıkarıp paylaş)
+    // Kısalık için burada tekrar yazmıyorum; line fonksiyonunu kullanman yeterli.
+    return ""; // kullanmıyorsan boş bırak
+  }
+  // Pratikte line fonksiyonunu zaten kullanıyorsun; buna ihtiyacın yok.
+  return "";
+}
+
+// ===== MED with mapping (symbol->syllable index). We'll call it only if needed. =====
+function tryMedFixSymbols(symbols, target, maxInserts=3){
+  const toStr = arr=>arr.join('');
+  let cur = symbols.slice();
+  let map = symbols.map((_,i)=>i);
+  const dist = s=>levenshtein(s,target).dist; let curStr=toStr(cur); let curD=dist(curStr);
+  const insertedIdx=[]; const insertedSyllIdx=[];
+  for(let step=0; step<maxInserts; step++){
+    let bestGain=0, bestI=-1, bestStr=null, bestMap=null;
+    for(let i=0;i<cur.length;i++){
+      if(cur[i]!=='-') continue;
+      if(i===cur.length-1) continue; // never at last syllable
+      const cand = cur.slice(0,i+1).concat(['.']).concat(cur.slice(i+1));
+      const candMap = map.slice(0,i+1).concat([map[i]]).concat(map.slice(i+1));
+      const s = toStr(cand); const d = dist(s); const gain = curD - d;
+      if(gain>bestGain){ bestGain=gain; bestI=i; bestStr=s; bestMap=candMap; }
+    }
+    if(bestGain>0 && bestI>=0){
+      cur.splice(bestI+1,0,'.');
+      map = bestMap; curStr = bestStr; curD -= bestGain;
+      insertedIdx.push(bestI+1); insertedSyllIdx.push(map[bestI+1]);
+      if(curStr===target) break;
+    } else break;
+  }
+  return {fixed: curStr===target, symbols: cur, symToSyll: map, insertedIdx, insertedSyllIdx};
+}
+
+// Map symbols -> syllable index *after* all edits (ulama vs.)
+function buildSymToSyllFromWordSyllables(wordSyllables){
+  const map = [];
+  let flatIdx = 0;
+  for (const ws of wordSyllables) {
+    for (let j = 0; j < ws.length; j++) {
+      map.push(flatIdx);
+      flatIdx++;
+    }
+  }
+  return map;
+}
+
+function colorMedDotsBySyll(symbols, symToSyll, medSyllSet){
+  const out = [];
+  for (let i = 0; i < symbols.length; i++){
+    const ch = symbols[i];
+    const isMedHere = medSyllSet.has(symToSyll[i]) && ch === '.';
+    out.push(isMedHere ? '<span class="med">.</span>' : escapeHtml(ch));
+  }
+  return out.join(' ');
+}
+
+// ULAMA (vasl): 3 harfli kapalı hece (2. harf kısa ünlü) + sonraki hece tek harf ve açık ise
+// son harfi bir sonraki heceye taşır. İlk hece açık (.) zorunlu kalır.
+function applyUlama(wordSyllables, symbols, targetPattern){
+  const flat = wordSyllables.flat().slice();
+
+  const shortVowels = ["a","e","ı","i","o","ö","u","ü"];
+  const longVowels  = ["â","î","ô","û"];
+  const isShort = ch => shortVowels.includes(ch);
+  const heceSymbol = s => /[aeıioöuü]$/.test(s) ? '.' : '-';
+
+  const ulamaSyllIdx = new Set();
+
+  for (let i=0; i<flat.length-1; i++){
+    const cur = flat[i], nxt = flat[i+1];
+    if (!cur || !nxt) continue;
+
+    // koşullar: CVC (3 harf), kapalı, 2. harf kısa ünlü, hedefte bu pozisyon açık bekleniyor
+    if (cur.length !== 3) continue;
+    if (heceSymbol(cur) !== '-') continue;
+    if (!isShort(cur[1])) continue;
+    if (i >= targetPattern.length || targetPattern[i] !== '.') continue;
+
+    // sonraki hece tek harf ve açık mı?
+    if (nxt.length !== 1) continue;
+    if (heceSymbol(nxt) !== '.') continue;
+
+    // ulama: cur = ilk 2 harf (açık olacak), nxt = cur[2] + nxt
+    const first2 = cur.slice(0,2);
+    const last1  = cur[2];
+    flat[i]   = first2;
+    flat[i+1] = last1 + nxt;
+
+    ulamaSyllIdx.add(i); // i. hecede ulama yapıldı
+  }
+
+  // yeni semboller (ulama sonrası); ulama yapılan heceler açık zorunlu
+  const newSymbols = flat.map(heceSymbol);
+  for (const i of ulamaSyllIdx) newSymbols[i] = '.';
+
+  // wordSyllables'ı düz indekse göre yeniden inşa et (görüntüleme için)
+  const rebuilt = [];
+  for (let w=0, ptr=0; w<wordSyllables.length; w++){
+    const count = wordSyllables[w].length;
+    rebuilt[w] = flat.slice(ptr, ptr+count);
+    ptr += count;
+  }
+
+  return { wordSyllables: rebuilt, symbols: newSymbols, ulamaSyllIdx };
+}
+
+function annotateAgainstTargetSymbols(symbols, target, wordSyllables, symToSyll, medSyllSet, ulamaSyllSet){
+  const curStr = symbols.join('');
+  const {alA, alB, ops} = backtrackAlign(curStr, target);
+
+  let posA=-1;
+  const imaleSyllIdx = new Set();
+  const zihafSyllIdx = new Set();
+  const genericErrIdx = new Set(); // I/D türü hatalar için
+  const symHtml=[];
+
+  for(let k=0;k<ops.length;k++){
+    const op=ops[k], a=alA[k], b=alB[k];
+
+    if(op==='I'){ // target'tan gelen ekstra sembol
+      symHtml.push(`<span class="err">${b}</span>`);
+      continue;
+    }
+    if(op==='D'){ // mevcutta var, target'ta yok
+      posA++;
+      const sIdx = symToSyll[Math.min(posA, symToSyll.length-1)];
+      symHtml.push(`<span class="err">${a}</span>`);
+      genericErrIdx.add(sIdx);
+      continue;
+    }
+
+    // M veya S
+    posA++;
+    const sIdx = symToSyll[Math.min(posA, symToSyll.length-1)];
+    if(op==='M'){
+      symHtml.push(escapeHtml(a));
+    }else{ // S: substitution -> imale mi, zihaf mı?
+      symHtml.push(`<span class="err">${escapeHtml(a)}</span>`);
+      if (a==='-' && b=== '.') imaleSyllIdx.add(sIdx);
+      else if (a==='.' && b==='-') zihafSyllIdx.add(sIdx);
+      else genericErrIdx.add(sIdx); // güvenlik
+    }
+  }
+
+  const flatSyl = wordSyllables.flat();
+  const renderedSyl=[];
+
+  for(let i=0;i<flatSyl.length;i++){
+  const classes=["syll"];
+
+  if (i === flatSyl.length - 1) {
+    // son hece -> asla işaretleme yapma
+  } else {
+    if (ulamaSyllSet && ulamaSyllSet.has(i)) classes.push('ulama');
+    if (medSyllSet && medSyllSet.has(i)) classes.push('med');
+    if (imaleSyllIdx.has(i)) classes.push('imale');
+    if (zihafSyllIdx.has(i)) classes.push('zihaf');
+    if (genericErrIdx.has(i)) classes.push('err');
+  }
+
+  renderedSyl.push(`<span class="${classes.join(' ')}">${escapeHtml(flatSyl[i])}</span>`);
+}
+
+
+  // hece satırını kelime bazlı "-" ile birleştirip yaz
+  let ptr=0;
+  const sylRow = wordSyllables
+    .map(ws => ws.map(()=>renderedSyl[ptr++]).join('<span class="muted">-</span>'))
+    .join(' ');
+
+  return {sylRow, symRow: symHtml.join(' ')};
+}
+
+// ===== Main run =====
+const $ = s=>document.querySelector(s);
+const metersTA=$('#meters'), poemTA=$('#poem');
+const forceSel=$('#forceMeter');
+const btnRun=$('#btnRun'), btnClear=$('#btnClear');
+const resultsDiv=$('#results'); const poemResult=$('#poemResult'); const lineCount=$('#lineCount');
+
+function refreshMeterSelect(meters){
+  const keep = forceSel.value;
+  forceSel.innerHTML = '<option value="">Auto-detect by majority</option>' + meters.map(m=>`<option value="${m.pattern}:::${m.name}">${m.name}</option>`).join('');
+  const idx=[...forceSel.options].findIndex(o=>o.value===keep); if(idx>=0) forceSel.selectedIndex=idx;
+}
+
+function bestMatchesForLine(dotdash, meters, normalize=true, preferHamming=false){
+  const out=[]; for(const m of meters){
+    const d = (preferHamming && dotdash.length===m.pattern.length) ? hamming(dotdash,m.pattern) : levenshtein(dotdash,m.pattern).dist;
+    const norm = d / Math.max(dotdash.length, m.pattern.length, 1);
+    out.push({name:m.name, pattern:m.pattern, dist:d, norm});
+  }
+  out.sort((a,b)=> (normalize? a.norm-b.norm : a.dist-b.dist) || a.dist-b.dist);
+  return out;
+}
+
+function run(){
+  const meters = parseMeterList(metersTA.value);
+  if(!meters.length){ alert('Could not parse the meter list. Paste your vezin_listesi.txt.'); return; }
+  refreshMeterSelect(meters);
+  const poem = poemTA.value||"";
+  const opts = { normalize: $('#normalizeScore').checked, preferHamming: $('#useHamming').checked };
+  const forced = forceSel.value ? (()=>{ const [pat,name]=forceSel.value.split(':::'); return {pattern:pat,name}; })() : null;
+
+  const lines = poem.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  lineCount.textContent = lines.length;
+
+  // PASS 1: compute symbols & nearest-per-line (for voting only)
+  const lineObjs = lines.map((txt) => {
+  const {symbols, wordSyllables} = vezin_bakici_line(txt);
+  const dd0 = symbols.join('');
+  const matches = bestMatchesForLine(dd0, meters, opts.normalize, opts.preferHamming);
+  return { txt, symbols, wordSyllables, dd0, matches };
+});
+
+// Majority vote (unless forced)
+let poemMeter = forced || null;
+if (!poemMeter) {
+  const votes = new Map();
+  for (const o of lineObjs) {
+    const top = o.matches[0];
+    votes.set(top.name, (votes.get(top.name) || 0) + 1);
+  }
+  let best = null;
+  for (const [name, count] of votes.entries()) {
+    if (!best || count > best.count) best = { name, count };
+  }
+  poemMeter = best ? meters.find(m => m.name === best.name) : meters[0];
+}
+poemResult.textContent = `Poem meter: ${poemMeter.name}`;
+
+// PASS 2: align each line to the *poem* meter; MED ONLY IF SHORTER
+const perLine = [];
+for (const o of lineObjs) {
+  const need = poemMeter.pattern.length - o.symbols.length;
+
+  let med;
+  if (need > 0) {
+    const maxK = Math.max(parseInt($('#maxMed').value || '4', 10), need);
+    med = tryMedFixSymbols(o.symbols, poemMeter.pattern, maxK);
+  } else {
+    // NO MED if equal or longer
+    med = {
+      fixed: o.dd0 === poemMeter.pattern,
+      symbols: o.symbols.slice(),
+      symToSyll: o.symbols.map((_, i) => i),
+      insertedIdx: [],
+      insertedSyllIdx: []
+    };
+  }
+
+  const medSyllSet = new Set(med.insertedSyllIdx);
+
+    // ULAMA: MED’den sonra, hizalamadan önce
+    const ul = applyUlama(o.wordSyllables, med.symbols, poemMeter.pattern);
+    // son heceyi yine '-' zorunlu bırak
+    if (ul.symbols.length > 0) ul.symbols[ul.symbols.length-1] = '-';
+    const ulamaSyllSet = ul.ulamaSyllIdx;
+
+    // İŞARETLEME: imale & zihaf ayrı, med & ulama ayrı
+    const symToSyllUL = buildSymToSyllFromWordSyllables(ul.wordSyllables);
+    const anno = annotateAgainstTargetSymbols(
+    ul.symbols, poemMeter.pattern, ul.wordSyllables, symToSyllUL, medSyllSet, ulamaSyllSet
+    );
+
+
+  const top = o.matches[0]; // just to show "Closest per-line" text
+  perLine.push({
+    line: o.txt,
+    hyphHTML: anno.sylRow,
+    symHTML: colorMedDotsBySyll(ul.symbols, symToSyllUL, medSyllSet),
+    closest: top
+  });
+}
+
+    // Render table
+    let html = '<table><thead><tr>\
+    <th>Line no.</th><th>Verse</th><th>Hyphenated syllables</th><th>To poem meter</th>\
+    </tr></thead><tbody>';
+
+    for (let idx = 0; idx < perLine.length; idx++) {
+    const r = perLine[idx];
+    const topStr = `${r.closest.name} <span class="muted small">(dist ${r.closest.dist}, norm ${(r.closest.norm).toFixed(3)})</span>`;
+    html += `<tr>
+        <td>${idx+1}</td>
+        <td>${escapeHtml(r.line)}</td>
+        <td class="mono">${r.hyphHTML}</td>
+        <td class="mono stack">
+        <div>${r.symHTML}</div>
+        <div class="small muted">Closest per-line: ${topStr}</div>
+        </td>
+    </tr>`;
+    }
+
+    html += '</tbody></table>';
+    resultsDiv.innerHTML = html;
+    }
+
+
+function colorMedDots(finalSymbols, insertedIdx){
+  const set = new Set(insertedIdx); const out=[];
+  for(let i=0;i<finalSymbols.length;i++){
+    const ch = finalSymbols[i];
+    if(ch==='.' && set.has(i)) out.push('<span class="med">.</span>'); else out.push(escapeHtml(ch));
+  }
+  return out.join(' ');
+}
+
+btnRun.addEventListener('click', run);
+btnClear.addEventListener('click', ()=>{ poemTA.value=''; resultsDiv.innerHTML=''; poemResult.textContent='Poem meter: —'; lineCount.textContent='0'; });
+
+// Prefill meters (your list)
+const defaultMeters = `--.--
+Müstefʿilâtün
+--..---
+Mefʿûlü Mefâʿîlün
+-.---.-
+Fâʿilâtün Fâʿilün
+-..--.-
+Müfteilün Fâʿilün
+--.-.--
+Mefʿûlü Fâʿilâtün
+.---.---
+Mefâʿîlün Mefâʿîlün
+-.---.--
+Fâʿilâtün Fâʿilâtün
+--..-.-.--
+Mefʿûlü Mefâʿilün Feʿûlün	
+--..--..--
+Mefʿûlü Mefâʿîlü Feʿûlün	
+--..---.--
+Mefʿûlü Mefâʿîlün Feʿûlün	
+.-.--.-.-
+Feʿûl Feʿûlün Feʿûl Feʿûl	
+--.--.--
+Müstefʿilün Fâʿilâtün
+--.----.--
+Müstefʿilâtün Müstefʿilâtün	
+-..---..--
+Müfteilâtün Müfteilâtün	
+.---.---.--
+Mefâʿîlün Mefâʿîlün Feʿûlün	
+-.---.---.-
+Fâʿilâtün Fâʿilâtün Fâʿilün	
+..--.-.-..-
+Feʿilâtün Mefâʿilün Feʿilün	
+..--..--..-
+Feʿilâtün Feʿilâtün Feʿilün	
+-..--..--.-
+Müfteilün Müfteilün Fâʿilün	
+.-.-.-.-.--
+Mefâʿilün Mefâʿilün Feʿûlün	
+.--.--.--.-
+Feʿûlün Feʿûlün Feʿûlün Feʿûl	
+.--.--.--.--
+Feʿûlün Feʿûlün Feʿûlün Feʿûlün	
+--..-----..--
+Mefʿûlü Mefâʿîlün Mefʿûlü Feʿûlün	
+-..--..--..--
+Müfteilün Müfteilün Müfteilâtün	
+--.-.-..--.-.-
+Mefʿûlü Fâʿilâtü Mefâʿîlü Fâʿilün	
+--..--..--..--
+Mefʿûlü Mefâʿîlü Mefâʿîlü Feʿûlün	
+--.-.----.-.--
+Mefʿûlü Fâʿilâtün Mefʿûlü Fâʿilâtün	
+--..-----..---
+Mefʿûlü Mefâʿîlün Mefʿûlü Mefâʿîlün	
+-..--.--..--.-
+Müfteilün Fâʿilün Müfteilün Fâʿilün	
+.-.-.--.-.-.--
+Mefâʿilün Feʿûlün Mefâʿilün Feʿûlün	
+.---.--.---.--
+Mefâʿîlün Feʿûlün Mefâʿîlün Feʿûlün	
+.--.--.--.--.-
+Feʿûlün Feʿûlün Feʿûlün Feʿûlün Feʿûl	
+-.---.---.---.-
+Fâʿilâtün Fâʿilâtün Fâʿilâtün Fâʿilün	
+..--..--..--..-
+Feʿilâtün Feʿilâtün Feʿilâtün Feʿilün	
+.-.-..--.-.-..-
+Mefâʿilün Feʿilâtün Mefâʿilün Feʿilün	
+.---.---.---.---
+Mefâʿîlün Mefâʿîlün Mefâʿîlün Mefâʿîlün	
+--.---.---.---.-
+Müstefʿilün Müstefʿilün Müstefʿilün Müstefʿilün	
+-..-.-.--..-.-.-
+Müfteilün Mefâʿilün Müfteilün Mefâʿilün	
+-..--..--..--..-
+Müfteilün Müfteilün Müfteilün Müfteilün	
+..-.-.--..-.-.--
+Mütefâilün Feʿûlün Mütefâilün Feʿûlün	
+.-.-.-.-.-.-.-.-
+Mefâʿilün Mefâʿilün Mefâʿilün Mefâʿilün	
+.-.-..--.-.-..--
+Mefâʿilün Feʿilâtün Mefâʿilün Feʿilâtün	
+-.---.---.---.--
+Fâʿilâtün Fâʿilâtün Fâʿilâtün Fâʿilâtün	
+..--..--..--..--
+Feʿilâtün Feʿilâtün Feʿilâtün Feʿilâtün	
+..---.--..---.--
+Feʿilâtün Fâʿilâtün Feʿilâtün Fâʿilâtün	
+--.----.----.----.--
+Müstefʿilâtün Müstefʿilâtün Müstefʿilâtün Müstefʿilâtün	
+..-.-..-.-..-.-..-.-
+Mütefâilün Mütefâilün Mütefâilün Mütefâilün`;
+metersTA.value = defaultMeters;
+refreshMeterSelect(parseMeterList(defaultMeters));
+</script>
+</body>
+</html>
