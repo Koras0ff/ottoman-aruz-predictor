@@ -61,7 +61,7 @@
 
 <div class="container grid">
   <section class="card">
-    <label>Meter list (paste the contents of <em>vezin_listesi.txt</em>)</label>
+    <label>Meter list)</label>
     <textarea id="meters" spellcheck="false"></textarea>
     <div class="row" style="margin-top:10px">
       <div>
@@ -454,7 +454,7 @@ function bestMatchesForLine(dotdash, meters, normalize=true, preferHamming=false
 
 function run(){
   const meters = parseMeterList(metersTA.value);
-  if(!meters.length){ alert('Could not parse the meter list. Paste your vezin_listesi.txt.'); return; }
+  if(!meters.length){ alert('Could not parse the meter list.'); return; }
   refreshMeterSelect(meters);
   const poem = poemTA.value||"";
   const opts = { normalize: $('#normalizeScore').checked, preferHamming: $('#useHamming').checked };
